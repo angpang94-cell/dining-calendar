@@ -56,7 +56,7 @@ function modeData(rate) {
   return { title: '이번 달은 정말 많이 먹었네요!', sub: '다음 맛있는 순간도 편하게 기록해요.' };
 }
 function characterAsset(rate) {
-  if (rate < 25) return 'character-00-hungry.png';
+  if (rate < 25) return 'character-hungry-v1.png';
   if (rate < 50) return 'character-25-lightly-full.png';
   if (rate < 75) return 'character-50-happy-full.png';
   if (rate < 100) return 'character-75-very-full.png';
