@@ -1,6 +1,7 @@
 import './styles.css';
 import './fonts.css';
 import './overrides.css';
+import { supabase } from './supabase.js';
 
 const KEY = 'dining-calendar-v1';
 const categories = ['동석 외식', '희랑 외식', '대리비', '같이 외식'];
@@ -21,12 +22,103 @@ const seed = {
     { id: crypto.randomUUID(), date: iso(new Date(today.getFullYear(), today.getMonth(), 13)), amount: 9000, restaurant: '오늘의 집밥', menu: '김치찌개, 공기밥', category: '같이 외식', memo: '', createdAt: Date.now(), updatedAt: Date.now() }
   ]
 };
-let state = JSON.parse(localStorage.getItem(KEY) || 'null') || seed;
+const legacyState = JSON.parse(localStorage.getItem(KEY) || 'null');
+let state = { settings: { ...seed.settings }, records: [] };
 let activeTab = 'home';
 let filter = { start: iso(startOfMonth(today)), end: iso(endOfMonth(today)), label: '이번 달' };
 let editingId = null;
+let householdId = null;
+let realtimeChannel = null;
 
-function save() { localStorage.setItem(KEY, JSON.stringify(state)); }
+function appError(error) { console.error(error); alert('저장 중 문제가 생겼어요. 잠시 후 다시 시도해주세요.'); }
+function toAppRecord(row) { return { id: row.id, date: row.date, amount: Number(row.amount), restaurant: row.restaurant || '', menu: row.menu || '', category: row.category, memo: row.memo || '', createdAt: Date.parse(row.created_at), updatedAt: Date.parse(row.updated_at) }; }
+function inviteUrl(token) { return `${location.origin}${location.pathname}?invite=${encodeURIComponent(token)}`; }
+function save() { persistSettings().catch(appError); }
+
+async function persistSettings() {
+  const { error } = await supabase.from('household_settings').update({
+    monthly_budget: state.settings.monthlyBudget,
+    selected_theme: state.settings.selectedTheme,
+    updated_at: new Date().toISOString()
+  }).eq('household_id', householdId);
+  if (error) throw error;
+}
+
+async function loadRemoteState() {
+  const [{ data: settings, error: settingsError }, { data: records, error: recordsError }] = await Promise.all([
+    supabase.from('household_settings').select('*').eq('household_id', householdId).maybeSingle(),
+    supabase.from('dining_records').select('*').eq('household_id', householdId).order('date', { ascending: false })
+  ]);
+  if (settingsError) throw settingsError;
+  if (recordsError) throw recordsError;
+  state = {
+    settings: { ...seed.settings, monthlyBudget: settings?.monthly_budget ?? seed.settings.monthlyBudget, selectedTheme: settings?.selected_theme ?? seed.settings.selectedTheme },
+    records: records.map(toAppRecord)
+  };
+}
+
+async function migrateLegacyState() {
+  if (!legacyState || state.records.length) return;
+  const records = (legacyState.records || []).map(({ companion, id, createdAt, updatedAt, ...record }) => ({
+    ...record,
+    id: id || crypto.randomUUID(),
+    household_id: householdId,
+    amount: Number(record.amount)
+  }));
+  if (records.length) {
+    const { error } = await supabase.from('dining_records').insert(records);
+    if (error) throw error;
+  }
+  state.settings = { ...state.settings, ...legacyState.settings };
+  await persistSettings();
+  localStorage.removeItem(KEY);
+  await loadRemoteState();
+}
+
+async function startRealtime() {
+  realtimeChannel?.unsubscribe();
+  realtimeChannel = supabase.channel(`dining-calendar-${householdId}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'dining_records', filter: `household_id=eq.${householdId}` }, async () => {
+      await loadRemoteState();
+      layout();
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'household_settings', filter: `household_id=eq.${householdId}` }, async () => {
+      await loadRemoteState();
+      layout();
+    })
+    .subscribe();
+}
+
+async function bootstrap() {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) {
+    const { error } = await supabase.auth.signInAnonymously();
+    if (error) throw error;
+  }
+  const inviteToken = new URLSearchParams(location.search).get('invite');
+  if (inviteToken) {
+    const { data, error } = await supabase.rpc('join_household', { invite_token: inviteToken });
+    if (error) throw error;
+    householdId = data;
+    history.replaceState({}, '', location.pathname);
+  }
+  if (!householdId) {
+    const { data: membership, error } = await supabase.from('household_members').select('household_id').limit(1).maybeSingle();
+    if (error) throw error;
+    householdId = membership?.household_id;
+  }
+  if (!householdId) {
+    const { data, error } = await supabase.rpc('create_household');
+    if (error) throw error;
+    householdId = data[0].household_id;
+    sessionStorage.setItem('dining-calendar-invite-token', data[0].invite_token);
+    setTimeout(() => window.prompt('남편에게 보낼 초대 링크예요.', inviteUrl(data[0].invite_token)), 0);
+  }
+  await loadRemoteState();
+  await migrateLegacyState();
+  await startRealtime();
+  layout();
+}
 function recordsBetween(start, end) { return state.records.filter(r => r.date >= start && r.date <= end).sort((a, b) => b.date.localeCompare(a.date)); }
 function currentMonthRecords() { return recordsBetween(iso(startOfMonth(today)), iso(endOfMonth(today))); }
 function sum(rs) { return rs.reduce((a, r) => a + Number(r.amount), 0); }
