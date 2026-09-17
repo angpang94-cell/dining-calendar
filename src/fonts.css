@@ -1,0 +1,37 @@
+@import url('https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&display=swap');
+
+:root {
+  --font-body: 'Jua', 'Gowun Dodum', 'Malgun Gothic', sans-serif;
+  --font-display: 'Jua', 'Gowun Dodum', 'Malgun Gothic', sans-serif;
+}
+
+body,
+button,
+input,
+select,
+textarea {
+  font-family: var(--font-body);
+}
+
+h1,
+h2,
+.summary-stats strong,
+.summary-stats b,
+.summary-main strong,
+.summary-grid b,
+.range-summary > strong,
+.stat-hero > strong,
+.visual-copy h2,
+.visual-status h2,
+.visual-rate,
+.record-row > b,
+.currency-input input {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.visual-copy h2 {
+  font-size: 25px;
+  line-height: 1.3;
+}
