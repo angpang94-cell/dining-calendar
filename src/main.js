@@ -159,16 +159,15 @@ function summaryCard(rs = currentMonthRecords()) {
   const total = sum(rs), budget = state.settings.monthlyBudget, rate = pct(total), diff = budget - total;
   return `<section class="summary-card"><div class="summary-stats"><div><span>이번 달 사용</span><strong>${money(total)}</strong></div><div><span>목표 예산</span><b>${money(budget)}</b></div><div><span>사용률</span><b class="rate-value">${rate.toFixed(rate % 1 ? 1 : 0)}%</b></div></div><div class="summary-foot"><span class="${diff < 0 ? 'over' : ''}">${diff < 0 ? `예산 초과 ${money(Math.abs(diff))}` : `남은 예산 ${money(diff)}`}</span><div class="progress"><span style="width:${Math.min(rate, 100)}%"></span></div>${rate > 100 ? `<small class="over-copy">100% + ${Math.round(rate - 100)}% 초과</small>` : ''}</div></section>`;
 }
-function modeData(rate) {
-  if (rate < 25) return { title: '아직 배가 고파요!', sub: '이번 달 첫 외식을 기록해보세요.' };
-  if (rate < 50) return { title: '맛있는 걸 조금 먹었어요.', sub: '천천히 맛있는 시간을 쌓아가요.' };
-  if (rate < 75) return { title: `배부름 ${Math.round(rate)}%`, sub: '이번 달도 맛있게 즐기고 있어요!' };
-  if (rate < 90) return { title: '슬슬 배가 꽉 차고 있어요.', sub: '그래도 기록은 계속할 수 있어요.' };
+function modeData(rate, hasRecords) {
+  if (rate < 20) return hasRecords
+    ? { title: '가볍게 맛있는 시간을 쌓았어요.', sub: '아직 여유가 있으니 다음 기록도 남겨보세요.' }
+    : { title: '아직 배가 고파요!', sub: '이번 달 첫 외식을 기록해보세요.' };
+  if (rate < 40) return { title: '맛있는 걸 조금 먹었어요.', sub: '천천히 맛있는 시간을 쌓아가요.' };
+  if (rate < 60) return { title: `배부름 ${Math.round(rate)}%`, sub: '이번 달도 맛있게 즐기고 있어요!' };
+  if (rate < 80) return { title: '슬슬 배가 꽉 차고 있어요.', sub: '그래도 기록은 계속할 수 있어요.' };
   if (rate < 100) return { title: '거의 배불러요!', sub: '이번 달의 맛있는 순간을 돌아봐요.' };
-  if (rate < 120) return { title: '앗! 예산보다 조금 더 먹었어요.', sub: '외식은 계속 기록할 수 있어요.' };
-  if (rate < 150) return { title: '배가 빵빵해졌어요!', sub: '예산을 조금 많이 넘겼어요.' };
-  if (rate < 200) return { title: '이제 정말 배불러요…!', sub: '맛있는 기록이 가득 쌓였네요.' };
-  return { title: '이번 달은 정말 많이 먹었네요!', sub: '다음 맛있는 순간도 편하게 기록해요.' };
+  return { title: '배가 빵빵해졌어요!', sub: '맛있는 기록이 가득 쌓였네요.' };
 }
 function characterAsset(rate) {
   if (rate < 20) return 'character-stage-1.png';
@@ -223,7 +222,8 @@ function statusBar(kicker, title, subtitle) {
   return `<section class="visual-status"><span class="visual-kicker">${kicker}</span><h2>${title}</h2><p>${subtitle}</p></section>`;
 }
 function visualization() {
-  const total = sum(currentMonthRecords()), rate = pct(total), d = modeData(rate);
+  const monthRecords = currentMonthRecords();
+  const total = sum(monthRecords), rate = pct(total), d = modeData(rate, monthRecords.length > 0);
   if (state.settings.selectedTheme === 'cake') return `<div class="visual-stack"><section class="visual visual-cake"><img class="generated-visual" src="/illustrations/${cakeAsset(rate)}" alt="외식비 사용률에 따른 케이크 장면"></section>${statusBar('MONTHLY DESSERT', rate < 100 ? `케이크 ${Math.round(rate)}% 먹었어요` : rate < 150 ? '추가 디저트까지 먹는 중!' : '이번 달은 디저트 파티가 됐어요!', rate < 100 ? `남은 케이크 약 ${Math.max(0, Math.ceil((100 - rate) / 12.5))}조각` : '케이크는 다 먹었지만 외식은 계속됐어요!')}</div>`;
   if (state.settings.selectedTheme === 'car') return `<div class="visual-stack"><section class="visual visual-car"><img class="generated-visual" src="/illustrations/${carAsset(rate)}" alt="외식비 사용률에 따른 자동차 드라이브 장면"></section>${statusBar('MONTHLY DRIVE', rate < 100 ? `현재 위치 ${Math.round(rate)}%` : rate < 150 ? '추가 드라이브 중!' : rate < 200 ? '생각보다 멀리 왔네요!' : '이번 달은 장거리 드라이브네요!', rate < 100 ? '나만의 외식 코스를 달리는 중이에요.' : '결승선을 지나서도 계속 달릴 수 있어요.')}</div>`;
   return `<div class="visual-stack"><section class="visual visual-character"><img class="character-generated" src="/illustrations/${characterAsset(rate)}" alt="외식비 사용률에 따른 캐릭터 배부르기 장면"></section>${statusBar('MONTHLY APPETITE', esc(d.title), esc(d.sub))}</div>`;
