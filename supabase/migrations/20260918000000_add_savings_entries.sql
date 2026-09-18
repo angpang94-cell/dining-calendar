@@ -13,6 +13,8 @@ create index if not exists savings_entries_household_date_idx
 
 alter table public.savings_entries enable row level security;
 
+grant select, insert, update, delete on table public.savings_entries to anon, authenticated;
+
 drop policy if exists "household members can read savings" on public.savings_entries;
 create policy "household members can read savings"
   on public.savings_entries for select
